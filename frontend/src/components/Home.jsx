@@ -11,6 +11,8 @@ L.Icon.Default.mergeOptions({
     shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
 });
 
+const API_BASE_URL = import.meta.env.VITE_API_URL;
+
 // Component to update map center when coordinates change
 function MapUpdater({ center }) {
     const map = useMap();
@@ -38,7 +40,7 @@ const Home = ({ setIsAuthenticated }) => {
 
         try {
             const response = await axios.get(
-                `http://localhost:8000/api/geo/${ip}`,
+                `${API_BASE_URL}/api/geo/${ip}`,
                 { headers: { Authorization: `Bearer ${token}` } }
             );
 
@@ -62,7 +64,7 @@ const Home = ({ setIsAuthenticated }) => {
     const fetchHistory = async () => {
         const token = localStorage.getItem('token');
         try {
-            const response = await axios.get('http://localhost:8000/api/history', {
+            const response = await axios.get(`${API_BASE_URL}/api/history`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setHistory(response.data);
@@ -108,7 +110,7 @@ const Home = ({ setIsAuthenticated }) => {
 
         const token = localStorage.getItem('token');
         try {
-            await axios.delete('http://localhost:8000/api/history', {
+            await axios.delete(`${API_BASE_URL}/api/history`, {
                 headers: { Authorization: `Bearer ${token}` },
                 data: { ids: selectedHistory }
             });
@@ -273,8 +275,8 @@ const Home = ({ setIsAuthenticated }) => {
                                             <div
                                                 key={item.id}
                                                 className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all hover:shadow-md ${selectedHistory.includes(item.id)
-                                                        ? 'border-indigo-500 bg-indigo-50'
-                                                        : 'border-gray-200 hover:border-indigo-300'
+                                                    ? 'border-indigo-500 bg-indigo-50'
+                                                    : 'border-gray-200 hover:border-indigo-300'
                                                     }`}
                                                 onClick={() => handleHistoryClick(item.ip_address)}
                                             >
