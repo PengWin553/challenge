@@ -87,28 +87,52 @@ app.get('/api/user-info', authenticate, (req, res) => {
 // Proxy endpoint for IP geolocation (to avoid CORS issues)
 app.get('/api/geo/:ip?', authenticate, async (req, res) => {
   try {
-    const ip = req.params.ip || req.ip.split(':').pop();
+    let ip = req.params.ip;
+
+    if (!ip) {
+      ip = req.headers['x-forwarded-for']?.split(',')[0] ||
+        req.socket.remoteAddress ||
+        req.ip;
+
+      if (ip === '::1' || ip === '::ffff:127.0.0.1' || ip.startsWith('::ffff:')) {
+        ip = ip.replace('::ffff:', '');
+      }
+
+      if (ip === '127.0.0.1' || ip === 'localhost' || ip === '::1') {
+        ip = ''; // ip-api.com will use its own IP detection
+      }
+    }
+
+    console.log('Fetching geo data for IP:', ip || 'auto-detect');
 
     // Using IP-API.com
-    const response = await fetch(`http://ip-api.com/json/${ip}?fields=status,message,country,countryCode,region,regionName,city,zip,lat,lon,timezone,isp,org,as,query`);
+    const apiUrl = ip
+      ? `http://ip-api.com/json/${ip}?fields=status,message,country,countryCode,region,regionName,city,zip,lat,lon,timezone,isp,org,as,query`
+      : `http://ip-api.com/json?fields=status,message,country,countryCode,region,regionName,city,zip,lat,lon,timezone,isp,org,as,query`;
+
+    const response = await fetch(apiUrl);
     const data = await response.json();
 
     if (data.status === 'fail') {
-      return res.status(400).json({ error: 'Invalid IP address' });
+      return res.status(400).json({ error: data.message || 'Invalid IP address' });
     }
 
-    // Save to search history if it's a specific IP search
-    if (req.params.ip) {
-      await pool.execute(
-        'INSERT INTO search_history (user_id, ip_address, country, city, isp) VALUES (?, ?, ?, ?, ?)',
-        [req.user.userId, ip, data.country, data.city, data.isp]
-      );
+    // Save to search history only if it's a specific IP search (not auto-detect)
+    if (req.params.ip && req.params.ip.trim() !== '') {
+      try {
+        await pool.execute(
+          'INSERT INTO search_history (user_id, ip_address, country, city, isp) VALUES (?, ?, ?, ?, ?)',
+          [req.user.userId, data.query, data.country || 'Unknown', data.city || 'Unknown', data.isp || 'Unknown']
+        );
+      } catch (dbError) {
+        console.error('Failed to save search history:', dbError);
+      }
     }
 
     res.json(data);
 
   } catch (error) {
-    console.error(error);
+    console.error('Geolocation error:', error);
     res.status(500).json({ error: 'Failed to fetch geolocation' });
   }
 });
@@ -122,6 +146,7 @@ app.get('/api/history', authenticate, async (req, res) => {
     );
     res.json(history);
   } catch (error) {
+    console.error('History fetch error:', error);
     res.status(500).json({ error: 'Failed to fetch history' });
   }
 });
@@ -130,17 +155,19 @@ app.get('/api/history', authenticate, async (req, res) => {
 app.delete('/api/history', authenticate, async (req, res) => {
   try {
     const { ids } = req.body;
-    if (!ids || !Array.isArray(ids)) {
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ error: 'Invalid request' });
     }
 
+    const placeholders = ids.map(() => '?').join(',');
     await pool.execute(
-      'DELETE FROM search_history WHERE id IN (?) AND user_id = ?',
-      [ids, req.user.userId]
+      `DELETE FROM search_history WHERE id IN (${placeholders}) AND user_id = ?`,
+      [...ids, req.user.userId]
     );
 
     res.json({ success: true });
   } catch (error) {
+    console.error('History delete error:', error);
     res.status(500).json({ error: 'Failed to delete history' });
   }
 });
