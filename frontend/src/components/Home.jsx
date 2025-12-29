@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
@@ -11,6 +11,15 @@ L.Icon.Default.mergeOptions({
     shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
 });
 
+// Component to update map center when coordinates change
+function MapUpdater({ center }) {
+    const map = useMap();
+    useEffect(() => {
+        map.setView(center, 10);
+    }, [center, map]);
+    return null;
+}
+
 const Home = ({ setIsAuthenticated }) => {
     const [geoData, setGeoData] = useState(null);
     const [searchIp, setSearchIp] = useState('');
@@ -18,7 +27,7 @@ const Home = ({ setIsAuthenticated }) => {
     const [loading, setLoading] = useState(true);
     const [history, setHistory] = useState([]);
     const [selectedHistory, setSelectedHistory] = useState([]);
-    const [userIp, setUserIp] = useState('');
+    const [userGeoData, setUserGeoData] = useState(null); // Store user's original geo data
 
     const fetchGeoData = useCallback(async (ip = '') => {
         setLoading(true);
@@ -33,19 +42,23 @@ const Home = ({ setIsAuthenticated }) => {
             );
 
             setGeoData(response.data);
-            if (!ip) {
-                setUserIp(response.data.query);
+
+            // Store user's original geolocation on first load
+            if (!ip && !userGeoData) {
+                setUserGeoData(response.data);
             }
 
-            // Fetch updated history
-            fetchHistory();
+            // Fetch updated history only if searching for a specific IP
+            if (ip) {
+                fetchHistory();
+            }
 
         } catch (err) {
             setError(err.response?.data?.error || 'Failed to fetch geolocation');
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [userGeoData]);
 
     const fetchHistory = async () => {
         const token = localStorage.getItem('token');
@@ -60,8 +73,11 @@ const Home = ({ setIsAuthenticated }) => {
     };
 
     useEffect(() => {
+        // Fetch user's geolocation on mount
         fetchGeoData();
-    }, [fetchGeoData]);
+        // Also fetch history on mount
+        fetchHistory();
+    }, []);
 
     const handleSearch = (e) => {
         e.preventDefault();
@@ -79,7 +95,12 @@ const Home = ({ setIsAuthenticated }) => {
     };
 
     const handleClear = () => {
-        fetchGeoData();
+        // Revert to user's original geolocation
+        if (userGeoData) {
+            setGeoData(userGeoData);
+            setError('');
+            setSearchIp('');
+        }
     };
 
     const handleHistoryClick = (ip) => {
@@ -153,6 +174,11 @@ const Home = ({ setIsAuthenticated }) => {
                     ) : geoData && (
                         <div style={styles.geoInfo}>
                             <h2>Geolocation Information</h2>
+                            {userGeoData && geoData.query === userGeoData.query && (
+                                <div style={styles.currentUserBadge}>
+                                    Your Current Location
+                                </div>
+                            )}
                             <div style={styles.infoGrid}>
                                 <div style={styles.infoItem}>
                                     <strong>IP Address:</strong>
@@ -200,38 +226,44 @@ const Home = ({ setIsAuthenticated }) => {
                         </div>
 
                         <div style={styles.historyList}>
-                            {history.map((item) => (
-                                <div
-                                    key={item.id}
-                                    style={{
-                                        ...styles.historyItem,
-                                        ...(selectedHistory.includes(item.id) ? styles.selectedItem : {})
-                                    }}
-                                    onClick={() => handleHistoryClick(item.ip_address)}
-                                >
-                                    <input
-                                        type="checkbox"
-                                        checked={selectedHistory.includes(item.id)}
-                                        onChange={(e) => {
-                                            if (e.target.checked) {
-                                                setSelectedHistory([...selectedHistory, item.id]);
-                                            } else {
-                                                setSelectedHistory(selectedHistory.filter(id => id !== item.id));
-                                            }
+                            {history.length === 0 ? (
+                                <div style={styles.emptyHistory}>
+                                    No search history yet. Start searching for IP addresses!
+                                </div>
+                            ) : (
+                                history.map((item) => (
+                                    <div
+                                        key={item.id}
+                                        style={{
+                                            ...styles.historyItem,
+                                            ...(selectedHistory.includes(item.id) ? styles.selectedItem : {})
                                         }}
-                                        onClick={(e) => e.stopPropagation()}
-                                    />
-                                    <div style={styles.historyContent}>
-                                        <div style={styles.historyIp}>{item.ip_address}</div>
-                                        <div style={styles.historyLocation}>
-                                            {item.city}, {item.country}
-                                        </div>
-                                        <div style={styles.historyTime}>
-                                            {new Date(item.searched_at).toLocaleString()}
+                                        onClick={() => handleHistoryClick(item.ip_address)}
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedHistory.includes(item.id)}
+                                            onChange={(e) => {
+                                                if (e.target.checked) {
+                                                    setSelectedHistory([...selectedHistory, item.id]);
+                                                } else {
+                                                    setSelectedHistory(selectedHistory.filter(id => id !== item.id));
+                                                }
+                                            }}
+                                            onClick={(e) => e.stopPropagation()}
+                                        />
+                                        <div style={styles.historyContent}>
+                                            <div style={styles.historyIp}>{item.ip_address}</div>
+                                            <div style={styles.historyLocation}>
+                                                {item.city}, {item.country}
+                                            </div>
+                                            <div style={styles.historyTime}>
+                                                {new Date(item.searched_at).toLocaleString()}
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            ))}
+                                ))
+                            )}
                         </div>
                     </div>
                 </div>
@@ -242,7 +274,9 @@ const Home = ({ setIsAuthenticated }) => {
                             center={[geoData.lat, geoData.lon]}
                             zoom={10}
                             style={styles.map}
+                            key={`${geoData.lat}-${geoData.lon}`}
                         >
+                            <MapUpdater center={[geoData.lat, geoData.lon]} />
                             <TileLayer
                                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                                 attribution='© OpenStreetMap contributors'
@@ -350,6 +384,16 @@ const styles = {
         boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
         marginBottom: '30px',
     },
+    currentUserBadge: {
+        display: 'inline-block',
+        padding: '6px 12px',
+        background: '#2ecc71',
+        color: 'white',
+        borderRadius: '4px',
+        fontSize: '14px',
+        fontWeight: 'bold',
+        marginBottom: '15px',
+    },
     infoGrid: {
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
@@ -384,6 +428,11 @@ const styles = {
     historyList: {
         maxHeight: '300px',
         overflowY: 'auto',
+    },
+    emptyHistory: {
+        padding: '20px',
+        textAlign: 'center',
+        color: '#999',
     },
     historyItem: {
         display: 'flex',
