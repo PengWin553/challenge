@@ -87,7 +87,6 @@ const Home = ({ setIsAuthenticated }) => {
         }
 
         fetchGeoData(searchIp);
-        setSearchIp('');
         setShowHistory(false); // Close history on mobile after search
     };
 
@@ -203,7 +202,7 @@ const Home = ({ setIsAuthenticated }) => {
                                     <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Location Details</h2>
                                     {userGeoData && geoData.query === userGeoData.query && (
                                         <span className="inline-block px-3 py-1 bg-green-500 text-white rounded-full text-xs sm:text-sm font-semibold">
-                                            Your Current Location
+                                            📍 Your Current Location
                                         </span>
                                     )}
                                 </div>
@@ -244,7 +243,7 @@ const Home = ({ setIsAuthenticated }) => {
                         <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6">
                             <div className="flex justify-between items-center mb-4">
                                 <h3 className="text-lg sm:text-xl font-bold text-gray-800 flex items-center gap-2">
-                                    Search History
+                                    📜 Search History
                                     <button
                                         onClick={() => setShowHistory(!showHistory)}
                                         className="lg:hidden ml-2 text-indigo-600"
@@ -274,8 +273,8 @@ const Home = ({ setIsAuthenticated }) => {
                                             <div
                                                 key={item.id}
                                                 className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all hover:shadow-md ${selectedHistory.includes(item.id)
-                                                    ? 'border-indigo-500 bg-indigo-50'
-                                                    : 'border-gray-200 hover:border-indigo-300'
+                                                        ? 'border-indigo-500 bg-indigo-50'
+                                                        : 'border-gray-200 hover:border-indigo-300'
                                                     }`}
                                                 onClick={() => handleHistoryClick(item.ip_address)}
                                             >
@@ -309,7 +308,7 @@ const Home = ({ setIsAuthenticated }) => {
 
                     {/* Right Panel - Map */}
                     <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 h-96 lg:h-full lg:min-h-[600px] relative z-0">
-                        <h3 className="text-lg sm:text-xl font-bold text-gray-800 mb-4">Map View</h3>
+                        <h3 className="text-lg sm:text-xl font-bold text-gray-800 mb-4">🗺️ Map View</h3>
                         {geoData && geoData.lat && geoData.lon ? (
                             <div className="h-[calc(100%-2rem)] rounded-lg overflow-hidden shadow-inner relative z-0">
                                 <MapContainer
